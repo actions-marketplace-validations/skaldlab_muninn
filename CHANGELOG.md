@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.4] - 2026-07-04
+
+### Changed
+- Docker image scanner updates: osv-scanner 2.4.0, trivy 0.72.0, semgrep
+  1.168.0, zizmor 1.26.1 (checkov remains at 3.2.531 pending aiohttp cap lift).
+
 ## [0.3.3] - 2026-06-17
 
 ### Changed
