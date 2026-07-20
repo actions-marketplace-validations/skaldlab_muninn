@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.5] - 2026-07-20
+
+### Changed
+- Docker image scanner updates: semgrep 1.170.0, zizmor 1.27.0 (checkov
+  remains at 3.2.531 pending aiohttp cap lift).
+
 ## [0.3.4] - 2026-07-04
 
 ### Changed
