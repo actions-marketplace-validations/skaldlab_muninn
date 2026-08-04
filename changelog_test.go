@@ -43,6 +43,26 @@ func unreleasedSection(t *testing.T, changelog string) string {
 	return rest[:end]
 }
 
+// releasedSection isolates assertions to a single release version so older
+// changelog entries cannot satisfy tests (e.g. a historical GitPython note).
+// It returns the body of the "## [version] - ..." section exclusive of that
+// heading and of the next "## " heading; version is e.g. "0.3.7". The date is
+// matched flexibly as yyyy-mm-dd rather than hard-coded.
+func releasedSection(t *testing.T, changelog, version string) string {
+	t.Helper()
+	re := regexp.MustCompile(`(?m)^## \[` + regexp.QuoteMeta(version) + `\] - \d{4}-\d{2}-\d{2}$`)
+	loc := re.FindStringIndex(changelog)
+	if loc == nil {
+		t.Fatalf("%s has no \"## [%s] - yyyy-mm-dd\" heading", changelogPath, version)
+	}
+	rest := changelog[loc[1]:]
+	end := strings.Index(rest, "\n## ")
+	if end < 0 {
+		return rest
+	}
+	return rest[:end]
+}
+
 // bulletEntryContaining returns the "- " bullet entry (including indented
 // wrap continuations) that contains needle. ok is false when needle sits in
 // unbulleted prose, even if an earlier bullet appears above it.
@@ -126,28 +146,28 @@ func TestChangelog_UnreleasedSectionUsesChangedSubheading(t *testing.T) {
 	}
 }
 
-// TestChangelog_UnreleasedSectionDocumentsGitPythonFloorBump ensures the
-// advisory and floor version are recorded where operators look for remediations.
-func TestChangelog_UnreleasedSectionDocumentsGitPythonFloorBump(t *testing.T) {
+// TestChangelog_DocumentsGitPythonFloorBump ensures the advisory and floor
+// version are recorded on the v0.3.7 release notes (not only via older entries).
+func TestChangelog_DocumentsGitPythonFloorBump(t *testing.T) {
 	changelog := readChangelog(t)
-	section := unreleasedSection(t, changelog)
+	section := releasedSection(t, changelog, "0.3.7")
 
 	for _, want := range []string{"GitPython", "3.1.55", "GHSA-94p4-4cq8-9g67"} {
 		if !strings.Contains(section, want) {
-			t.Errorf("[Unreleased] section is missing %q, got: %q", want, section)
+			t.Errorf("[0.3.7] section is missing %q, got: %q", want, section)
 		}
 	}
 }
 
-// TestChangelog_UnreleasedEntryIsABulletListItem rejects advisory mentions that
-// only appear in unbulleted prose after another list item.
-func TestChangelog_UnreleasedEntryIsABulletListItem(t *testing.T) {
+// TestChangelog_GitPythonFloorEntryIsABulletListItem rejects advisory mentions
+// that only appear in unbulleted prose after another list item in [0.3.7].
+func TestChangelog_GitPythonFloorEntryIsABulletListItem(t *testing.T) {
 	changelog := readChangelog(t)
-	section := unreleasedSection(t, changelog)
+	section := releasedSection(t, changelog, "0.3.7")
 
 	entry, ok := bulletEntryContaining(section, "GHSA-94p4-4cq8-9g67")
 	if !ok {
-		t.Errorf("GitPython floor changelog entry does not appear to be a \"- \" bullet-list item")
+		t.Errorf("GitPython floor changelog entry does not appear to be a \"- \" bullet-list item in [0.3.7]")
 	}
 	if ok && !strings.Contains(entry, "GHSA-94p4-4cq8-9g67") {
 		t.Errorf("bullet entry missing GHSA-94p4-4cq8-9g67, got: %q", entry)
