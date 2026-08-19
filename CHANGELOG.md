@@ -4,6 +4,18 @@
 
 ### Changed
 
+- Scanner dependency updates: osv-scanner `2.5.1`, trivy `0.74.0`,
+  semgrep `1.173.0`.
+- checkov remains pinned at `3.2.531`: `3.2.532+` and `3.3.x` reintroduce
+  transitive `ecdsa` (`>=0.19.0,<1.0.0`), currently affected by
+  `PYSEC-2026-1325` / `CVE-2024-23342` with no fixed ecdsa release yet.
+- The secure `aiohttp>=3.14.3` floor remains enforced.
+- Removed obsolete semgrep dependency overrides (`click`, `mcp`) after semgrep
+  upstream constraint updates; lockfile now resolves to `click 8.4.2` and
+  `mcp 1.29.0` without override pins.
+- Post-release follow-up: update all user-facing latest-version references
+  (website pages, README snippets, and docs examples) to the released tag.
+
 ## [0.3.8] - 2026-08-10
 
 ### Changed
