@@ -20,6 +20,7 @@ const (
 	requirementsScannersTxt = "requirements-scanners.txt"
 )
 
+// readRepoFile loads a workspace file for scanner lockfile regression tests.
 func readRepoFile(t *testing.T, name string) string {
 	t.Helper()
 	data, err := os.ReadFile(name)
@@ -122,6 +123,8 @@ func TestCompareVersions(t *testing.T) {
 
 // ── requirements-scanners.in ────────────────────────────────────────────────
 
+// TestRequirementsScannersIn_ZizmorPinnedToPatchedRelease locks the direct
+// zizmor pin to a non-yanked release line in requirements-scanners.in.
 func TestRequirementsScannersIn_ZizmorPinnedToPatchedRelease(t *testing.T) {
 	in := readRepoFile(t, requirementsScannersIn)
 	pins := parsePins(exactPinLineRE, in)
@@ -129,8 +132,8 @@ func TestRequirementsScannersIn_ZizmorPinnedToPatchedRelease(t *testing.T) {
 	if !ok {
 		t.Fatalf("requirements-scanners.in has no exact zizmor==... pin")
 	}
-	if got != "1.29.0" {
-		t.Errorf("zizmor pin = %q, want 1.29.0", got)
+	if got != "1.30.0" {
+		t.Errorf("zizmor pin = %q, want 1.30.0", got)
 	}
 }
 
@@ -225,6 +228,8 @@ func TestRequirementsScannersIn_CryptographySecurityFloor(t *testing.T) {
 	}
 }
 
+// TestPinVersionRegexRejectsPrereleaseSuffixes keeps pin/floor regexes on
+// numeric dotted versions so compareVersions and lockfile parsing stay stable.
 func TestPinVersionRegexRejectsPrereleaseSuffixes(t *testing.T) {
 	cases := []struct {
 		name string
@@ -232,7 +237,7 @@ func TestPinVersionRegexRejectsPrereleaseSuffixes(t *testing.T) {
 		line string
 		want bool
 	}{
-		{"exact release", exactPinLineRE, "zizmor==1.29.0", true},
+		{"exact release", exactPinLineRE, "zizmor==1.30.0", true},
 		{"exact rc rejected", exactPinLineRE, "zizmor==1.29.0rc1", false},
 		{"floor release", floorPinLineRE, "aiohttp>=3.14.1", true},
 		{"floor alpha rejected", floorPinLineRE, "aiohttp>=3.14.1a1", false},
@@ -391,13 +396,15 @@ func TestRequirementsScannersTxt_ZizmorMatchesInPinExactly(t *testing.T) {
 	}
 }
 
+// TestRequirementsScannersTxt_ZizmorBlockHasValidHashesAndProvenance verifies
+// the lockfile zizmor entry matches the .in pin and includes hashes plus provenance.
 func TestRequirementsScannersTxt_ZizmorBlockHasValidHashesAndProvenance(t *testing.T) {
 	txt := readRepoFile(t, requirementsScannersTxt)
 	block, ok := packageBlock(txt, "zizmor")
 	if !ok {
 		t.Fatalf("requirements-scanners.txt has no zizmor entry")
 	}
-	if !strings.HasPrefix(block, "zizmor==1.29.0") {
+	if !strings.HasPrefix(block, "zizmor==1.30.0") {
 		t.Errorf("zizmor block does not start with the expected pin, got: %q", block)
 	}
 
