@@ -13,7 +13,7 @@
 //
 //	--config    path to muninn.yml (default: muninn.yml, env: CONFIG_PATH)
 //	--target    path to repository root to scan (default: ., env: SCAN_TARGET)
-//	--fail-on   minimum severity to exit non-zero (default: critical, env: FAIL_ON)
+//	--fail-on   minimum severity to exit non-zero (default: info, env: FAIL_ON)
 //	--output    comma-separated output formats: json,sarif,comment (env: OUTPUT_FORMATS)
 //	--version   print version and exit
 package main
@@ -122,6 +122,7 @@ func scan(ctx context.Context, cfg *config.Config, target, outputFormats string)
 	}
 
 	findings = applySuppressions(findings, cfg.Suppressions)
+	findings = dedupeByAdvisory(findings)
 
 	sarifPath, jsonPath := resolveOutputPaths()
 	for _, format := range splitFormats(outputFormats) {
@@ -262,6 +263,13 @@ func applySuppressions(findings []normalizer.Finding, suppressions []config.Supp
 
 // isSuppressed returns true when f matches at least one active suppression
 // rule. A suppression is active when its Expires field is zero or in the future.
+//
+// Matchers (any one is sufficient):
+//   - id: file path substring
+//   - fingerprint: exact fingerprint
+//   - tool + rule-id: both must match when both are set
+//   - tool alone: all findings from that scanner
+//   - rule-id alone: that rule from any scanner
 func isSuppressed(f normalizer.Finding, suppressions []config.Suppression, now time.Time) bool {
 	for _, s := range suppressions {
 		if !suppressionActive(s, now) {
@@ -273,8 +281,27 @@ func isSuppressed(f normalizer.Finding, suppressions []config.Suppression, now t
 		if s.Fingerprint != "" && s.Fingerprint == f.Fingerprint {
 			return true
 		}
+		if matchesToolRuleSuppression(f, s) {
+			return true
+		}
 	}
 	return false
+}
+
+// matchesToolRuleSuppression reports whether f matches a suppression's tool
+// and/or rule-id selectors. When both are set, both must match; either field
+// alone matches all findings with that tool or rule id respectively.
+func matchesToolRuleSuppression(f normalizer.Finding, s config.Suppression) bool {
+	switch {
+	case s.Tool != "" && s.RuleID != "":
+		return f.Tool == s.Tool && f.RuleID == s.RuleID
+	case s.Tool != "":
+		return f.Tool == s.Tool
+	case s.RuleID != "":
+		return f.RuleID == s.RuleID
+	default:
+		return false
+	}
 }
 
 // suppressionActive reports whether a suppression rule has not yet expired.

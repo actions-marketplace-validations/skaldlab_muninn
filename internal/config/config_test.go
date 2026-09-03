@@ -12,8 +12,8 @@ func TestDefaults(t *testing.T) {
 	if cfg.Version != 1 {
 		t.Errorf("Version = %d, want 1", cfg.Version)
 	}
-	if cfg.FailOn != "critical" {
-		t.Errorf("FailOn = %q, want critical", cfg.FailOn)
+	if cfg.FailOn != "info" {
+		t.Errorf("FailOn = %q, want info", cfg.FailOn)
 	}
 
 	want := []string{"gitleaks", "semgrep", "zizmor", "actionlint", "poutine", "trivy", "osv-scanner", "checkov"}
@@ -32,10 +32,16 @@ func TestDefaults(t *testing.T) {
 	if len(cfg.Scanners["semgrep"].Rulesets) == 0 {
 		t.Error("semgrep rulesets should not be empty")
 	}
-	// Trivy ships with severity filter and ignore-unfixed.
+	// Trivy ships with all severity levels and ignore-unfixed by default.
 	trivy := cfg.Scanners["trivy"]
-	if len(trivy.Severity) == 0 {
-		t.Error("trivy severity filter should not be empty")
+	wantSev := []string{"UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"}
+	if len(trivy.Severity) != len(wantSev) {
+		t.Fatalf("trivy.Severity = %v, want %v", trivy.Severity, wantSev)
+	}
+	for i, s := range wantSev {
+		if trivy.Severity[i] != s {
+			t.Errorf("trivy.Severity[%d] = %q, want %q", i, trivy.Severity[i], s)
+		}
 	}
 	if !trivy.IgnoreUnfixed {
 		t.Error("trivy IgnoreUnfixed should be true by default")
@@ -139,5 +145,25 @@ func TestSuppressionFields(t *testing.T) {
 	}
 	if s.RuleID != "aws-access-key" {
 		t.Errorf("RuleID = %q", s.RuleID)
+	}
+}
+
+func TestValidate_SuppressionRequiresSelector(t *testing.T) {
+	cfg := Defaults()
+	cfg.Suppressions = []Suppression{
+		{Reason: "no matcher fields"},
+	}
+	if err := validate(cfg); err == nil {
+		t.Fatal("validate expected error for suppression without selectors, got nil")
+	}
+}
+
+func TestValidate_SuppressionToolOnlyAccepted(t *testing.T) {
+	cfg := Defaults()
+	cfg.Suppressions = []Suppression{
+		{Tool: "poutine", Reason: "mute scanner"},
+	}
+	if err := validate(cfg); err != nil {
+		t.Fatalf("validate with tool-only suppression: %v", err)
 	}
 }

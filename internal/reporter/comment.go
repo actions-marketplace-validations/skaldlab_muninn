@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 
 	"github.com/skaldlab/muninn/internal/normalizer"
 )
@@ -167,21 +168,181 @@ func writeSeveritySection(w io.Writer, label string, findings []normalizer.Findi
 }
 
 func writeCommentFinding(w io.Writer, f normalizer.Finding) error {
-	title := f.Title
-	if title == "" {
-		title = f.RuleID
+	if normalizer.AdvisoryID(f) != "" {
+		return writeDependencyFinding(w, f)
 	}
-	loc := fmt.Sprintf("%s:%d", f.File, f.Line)
-	desc := truncateDesc(f.Description)
-	_, err := fmt.Fprintf(w,
-		"#### [%s] %s\n**File:** `%s`\n**Rule:** `%s`\n%s\n\n",
-		f.Tool, title, loc, f.RuleID, desc)
+	return writeGenericFinding(w, f)
+}
+
+func findingTitle(f normalizer.Finding) string {
+	if f.Title != "" {
+		return f.Title
+	}
+	return f.RuleID
+}
+
+// findingLocation formats file:line when a line number is present.
+func findingLocation(f normalizer.Finding) string {
+	if f.File == "" {
+		return ""
+	}
+	if f.Line > 0 {
+		return fmt.Sprintf("%s:%d", f.File, f.Line)
+	}
+	return f.File
+}
+
+func writeCommentHeading(w io.Writer, tag, title string) error {
+	_, err := fmt.Fprintf(w, "#### [%s] %s\n", tag, title)
 	return err
 }
 
+func writeCommentLine(w io.Writer, label, value string) error {
+	_, err := fmt.Fprintf(w, "**%s:** %s\n", label, value)
+	return err
+}
+
+func writeCommentCode(w io.Writer, label, value string) error {
+	return writeCommentLine(w, label, "`"+value+"`")
+}
+
+// writeGenericFinding renders non-dependency findings (secrets, SAST, IaC, CI).
+// Field order: File → Rule → optional extras → description.
+func writeGenericFinding(w io.Writer, f normalizer.Finding) error {
+	if err := writeCommentHeading(w, f.Tool, findingTitle(f)); err != nil {
+		return err
+	}
+	if loc := findingLocation(f); loc != "" {
+		if err := writeCommentCode(w, "File", loc); err != nil {
+			return err
+		}
+	}
+	if f.RuleID != "" {
+		if err := writeCommentCode(w, "Rule", f.RuleID); err != nil {
+			return err
+		}
+	}
+	if sources := normalizer.InjectionSources(f); len(sources) > 0 {
+		if err := writeCommentLine(w, "Sources", formatBacktickList(sources)); err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprintf(w, "%s\n\n", truncateDesc(f.Description))
+	return err
+}
+
+// formatBacktickList joins values as inline code spans for PR comment fields.
+func formatBacktickList(values []string) string {
+	parts := make([]string, len(values))
+	for i, v := range values {
+		parts[i] = "`" + v + "`"
+	}
+	return strings.Join(parts, ", ")
+}
+
+// writeDependencyFinding renders merged SCA findings under a neutral [dependency]
+// heading. Field order: Package → Advisory → Detected by → File/Sources → description.
+func writeDependencyFinding(w io.Writer, f normalizer.Finding) error {
+	if err := writeCommentHeading(w, "dependency", findingTitle(f)); err != nil {
+		return err
+	}
+	if line := dependencyPackageLine(f); line != "" {
+		if err := writeCommentLine(w, "Package", line); err != nil {
+			return err
+		}
+	}
+	if err := writeCommentLine(w, "Advisory", dependencyAdvisory(f)); err != nil {
+		return err
+	}
+	if err := writeCommentLine(w, "Detected by", strings.Join(detectingScanners(f), ", ")); err != nil {
+		return err
+	}
+	if err := writeFindingSources(w, f); err != nil {
+		return err
+	}
+	_, err := fmt.Fprintf(w, "%s\n\n", truncateDesc(f.Description))
+	return err
+}
+
+// dependencyPackageLine formats "`name` version (ecosystem)" from whatever the
+// scanner provided, omitting absent pieces.
+func dependencyPackageLine(f normalizer.Finding) string {
+	name := normalizer.PackageName(f)
+	if name == "" {
+		return ""
+	}
+	line := "`" + name + "`"
+	if v := normalizer.PackageVersion(f); v != "" {
+		line += " " + v
+	}
+	if eco := normalizer.Ecosystem(f); eco != "" {
+		line += " (" + eco + ")"
+	}
+	return line
+}
+
+// dependencyAdvisory shows the native advisory id, appending the shared CVE when
+// the native id uses a different scheme (e.g. "GHSA-… (CVE-…)").
+func dependencyAdvisory(f normalizer.Finding) string {
+	out := "`" + f.RuleID + "`"
+	if cve := normalizer.AdvisoryID(f); strings.HasPrefix(cve, "CVE-") && !strings.EqualFold(cve, f.RuleID) {
+		out += " (" + cve + ")"
+	}
+	return out
+}
+
+// detectingScanners returns the scanners that reported a finding: the merged
+// DetectedBy set, or the single producing Tool.
+func detectingScanners(f normalizer.Finding) []string {
+	if len(f.DetectedBy) > 0 {
+		return f.DetectedBy
+	}
+	return []string{f.Tool}
+}
+
+// writeFindingSources lists where each scanner saw a merged finding. Multiple
+// scanners get a bullet list; a single location uses the same File field as
+// non-dependency findings.
+func writeFindingSources(w io.Writer, f normalizer.Finding) error {
+	if len(f.Sources) > 1 {
+		if _, err := fmt.Fprint(w, "**Sources:**\n"); err != nil {
+			return err
+		}
+		for _, s := range f.Sources {
+			if _, err := fmt.Fprintf(w, "- `%s` (%s)\n", s.File, s.Tool); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if loc := findingLocation(f); loc != "" {
+		return writeCommentCode(w, "File", loc)
+	}
+	return nil
+}
+
 func truncateDesc(s string) string {
+	s = sanitizeDesc(s)
 	if len(s) <= commentMaxDesc {
 		return s
 	}
-	return s[:commentMaxDesc] + "..."
+	return strings.TrimSpace(s[:commentMaxDesc]) + "..."
+}
+
+// sanitizeDesc flattens a scanner-provided description into a single line of
+// plain text so its own Markdown — code fences, headings, tables — cannot break
+// out of the finding and corrupt the surrounding comment (e.g. an unbalanced
+// ``` fence swallowing every later finding and the footer into a code block).
+func sanitizeDesc(s string) string {
+	// Collapse all whitespace runs (including newlines) so line-anchored Markdown
+	// like ``` fences and # headings lose their block meaning.
+	s = strings.Join(strings.Fields(s), " ")
+	// Drop backticks so an odd count cannot open an inline or fenced code span.
+	s = strings.ReplaceAll(s, "`", "'")
+	// Escape a leading block-level marker so the flattened line renders as a
+	// paragraph, not a heading/list/quote.
+	if s != "" && strings.ContainsRune("#>-+*|", rune(s[0])) {
+		s = "\\" + s
+	}
+	return s
 }

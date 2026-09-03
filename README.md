@@ -1,8 +1,11 @@
 # Muninn
 
 [![CI](https://github.com/skaldlab/muninn/actions/workflows/ci.yml/badge.svg)](https://github.com/skaldlab/muninn/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/skaldlab/muninn/actions/workflows/codeql.yml/badge.svg)](https://github.com/skaldlab/muninn/actions/workflows/codeql.yml)
+[![CodeRabbit](https://img.shields.io/badge/CodeRabbit-Reviews-FF570A?labelColor=171717)](https://coderabbit.ai)
+[![Release](https://badgen.net/github/release/skaldlab/muninn)](https://github.com/skaldlab/muninn/releases)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![Go Version](https://img.shields.io/badge/go-1.26.4-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/Go-1.27.0-blue?logo=go)](https://go.dev/)
 
 **Muninn** is an all-in-one open-source security scanner for GitHub Actions pipelines and self-hosted CI, built by [Skald Lab](https://skaldlab.dev).
 
@@ -18,7 +21,7 @@ Add this to any GitHub Actions workflow:
 
 ```yaml
 - name: Muninn Security Scan
-  uses: skaldlab/muninn@v0.2.0
+  uses: skaldlab/muninn@v0.3.11
   with:
     token: ${{ secrets.GITHUB_TOKEN }}
     fail-on: high
@@ -41,6 +44,29 @@ Muninn runs all eight scanners, posts a summary comment on your pull request, up
 | **trivy** | Container image and filesystem vulnerabilities | [aquasecurity/trivy](https://github.com/aquasecurity/trivy) |
 | **checkov** | Infrastructure-as-Code misconfigurations (Terraform, K8s, Docker) | [bridgecrewio/checkov](https://github.com/bridgecrewio/checkov) |
 
+### Cross-scanner deduplication
+
+Running multiple dependency scanners means the same CVE can surface more than
+once — OSV-Scanner flags it in a lockfile while Trivy flags it in a container
+layer. Muninn collapses these into a single finding keyed on the advisory id
+(a `CVE-…` is preferred over `GHSA-…` so the same vulnerability converges across
+scanners) scoped to the affected package, so distinct packages sharing a CVE
+stay separate.
+
+Because an aggregated finding no longer belongs to one tool, dependency findings
+render under a neutral `[dependency]` heading (rather than `[osv-scanner]`) with
+structured detail, and the scanners are surfaced via attribution instead:
+
+- **PR comment** — `Package`, `Advisory` (with the shared CVE in parentheses),
+  `Detected by`, and a `Sources` list showing where each scanner saw it
+  (e.g. `package-lock.json (osv-scanner)`, `node:18 (trivy)`).
+- **JSON report** — `detected_by` (the scanner list) and `sources` (per-scanner
+  `tool` + `file` pairs).
+- **SARIF** — a `detectedBy` property on the result.
+
+The severity summary counts these aggregated unique findings, not raw scanner
+hits, because deduplication runs before any report is written.
+
 ---
 
 ## Configuration
@@ -52,7 +78,7 @@ version: 1
 
 # Minimum severity to fail the run.
 # Options: critical | high | medium | low | info
-fail-on: critical
+fail-on: info
 
 scanners:
   gitleaks:
@@ -81,7 +107,8 @@ scanners:
 
   trivy:
     enabled: true
-    severity: [CRITICAL, HIGH]
+    # Optional: narrow what Trivy reports (default: all levels).
+    # severity: [CRITICAL, HIGH]
     ignore-unfixed: true
 
   checkov:
@@ -109,7 +136,7 @@ suppressions:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `version` | `int` | `1` | Config schema version. Must be `1`. |
-| `fail-on` | `string` | `critical` | Minimum severity that causes a non-zero exit code |
+| `fail-on` | `string` | `info` | Minimum severity that causes a non-zero exit code |
 
 ### Scanner fields
 
@@ -118,7 +145,7 @@ Each key under `scanners` matches a scanner name. All scanners support `enabled`
 | Scanner | Additional fields | Description |
 |---|---|---|
 | `semgrep` | `rulesets`, `exclude-paths` | Semgrep rule packs and path prefixes to skip |
-| `trivy` | `severity`, `ignore-unfixed` | Severity filter and whether to omit unfixed CVEs |
+| `trivy` | `severity`, `ignore-unfixed` | Trivy severity filter (default: `UNKNOWN` through `CRITICAL`; omit to scan all levels) and whether to omit unfixed CVEs |
 | `checkov` | `skip-checks` | Checkov check IDs to skip |
 
 ### Suppression fields
@@ -127,8 +154,8 @@ Each key under `scanners` matches a scanner name. All scanners support `enabled`
 |---|---|
 | `id` | Suppress findings whose file path contains this substring |
 | `fingerprint` | Suppress a specific finding by its Muninn fingerprint |
-| `tool` | Scanner name (used with `rule-id`) |
-| `rule-id` | Scanner-native rule identifier (used with `tool`) |
+| `tool` | Scanner name; with `rule-id`, both must match. Alone, suppresses all findings from that scanner |
+| `rule-id` | Scanner-native rule identifier; with `tool`, both must match. Alone, suppresses that rule from any scanner |
 | `reason` | **Required.** Human-readable justification |
 | `expires` | Optional RFC 3339 UTC timestamp; omit for permanent suppressions |
 
@@ -137,7 +164,7 @@ Each key under `scanners` matches a scanner name. All scanners support `enabled`
 | Input | Default | Description |
 |---|---|---|
 | `token` | `${{ github.token }}` | GitHub token for PR comments and SARIF upload |
-| `fail-on` | `critical` | Minimum severity to exit non-zero |
+| `fail-on` | `info` | Minimum severity to exit non-zero |
 | `config` | `muninn.yml` | Path to config file relative to repository root |
 | `format` | `sarif,comment` | Comma-separated output formats: `sarif`, `json`, `comment` |
 | `output` | `muninn.sarif` | SARIF output path override |
@@ -183,7 +210,7 @@ The official image bundles Muninn and all eight scanner binaries:
 docker run --rm \
   -v "$(pwd):/github/workspace" \
   -w /github/workspace \
-  ghcr.io/skaldlab/muninn:0.2.0 \
+  ghcr.io/skaldlab/muninn:0.3.11 \
   --target . \
   --output json,sarif \
   --fail-on high
@@ -194,7 +221,7 @@ docker run --rm \
 Download a release binary from [GitHub Releases](https://github.com/skaldlab/muninn/releases) or install with Go:
 
 ```bash
-go install github.com/skaldlab/muninn@v0.2.0
+go install github.com/skaldlab/muninn@v0.3.11
 ```
 
 Scanner binaries (`gitleaks`, `semgrep`, `checkov`, and the rest) must be on `PATH`. The Docker image includes everything pre-installed.
@@ -209,7 +236,7 @@ Verify the container image:
 cosign verify \
   --certificate-identity-regexp '^https://github.com/skaldlab/muninn/\.github/workflows/release\.yml@' \
   --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
-  ghcr.io/skaldlab/muninn:0.2.0
+  ghcr.io/skaldlab/muninn:0.3.11
 ```
 
 Verify release binaries via the signed checksums file (download `checksums.txt` and the Sigstore bundle `checksums.txt.sigstore.json` from the release):
@@ -228,9 +255,9 @@ shasum -a 256 -c checksums.txt
 Inspect the image's SBOM and SLSA provenance attestations (attached by BuildKit):
 
 ```bash
-docker buildx imagetools inspect ghcr.io/skaldlab/muninn:0.2.0 \
+docker buildx imagetools inspect ghcr.io/skaldlab/muninn:0.3.11 \
   --format '{{ json .SBOM }}'
-docker buildx imagetools inspect ghcr.io/skaldlab/muninn:0.2.0 \
+docker buildx imagetools inspect ghcr.io/skaldlab/muninn:0.3.11 \
   --format '{{ json .Provenance }}'
 ```
 

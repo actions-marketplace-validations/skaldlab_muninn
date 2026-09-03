@@ -19,7 +19,6 @@ scanners:
     enabled: true
   trivy:
     enabled: true
-    severity: [CRITICAL, HIGH]
     ignore-unfixed: true
   checkov:
     enabled: true
@@ -29,4 +28,12 @@ suppressions:
     reason: >
       Intentional test fixtures (scanner sample output and integration repos).
       All secrets are fake and all vulnerabilities are deliberate.
+    expires: ""
+
+  - tool: zizmor
+    rule-id: zizmor/self-repository
+    reason: >
+      action.yml lives at repository root; bare $/ has no subpath and is rejected
+      by GitHub Actions and actionlint 1.7.12. Workspace-relative ./ with
+      checkout is the compatible self-scan form until root $/ is supported.
     expires: ""

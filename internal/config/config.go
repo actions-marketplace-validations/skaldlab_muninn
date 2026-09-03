@@ -10,13 +10,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// DefaultTrivySeverities is the Muninn default for scanners.trivy.severity.
+// It matches Trivy's native --severity default so osv-scanner and trivy overlap
+// on the same advisories; consumers narrow the scan with an explicit list.
+var DefaultTrivySeverities = []string{"UNKNOWN", "LOW", "MEDIUM", "HIGH", "CRITICAL"}
+
 // Config is the top-level structure for muninn.yml.
 type Config struct {
 	// Version must be 1. Reserved for future breaking-change migrations.
 	Version int `yaml:"version"`
 
 	// FailOn is the minimum severity that causes Muninn to exit non-zero.
-	// Accepted values: critical, high, medium, low.
+	// Accepted values: critical, high, medium, low, info.
 	FailOn string `yaml:"fail-on"`
 
 	// Scanners maps each scanner name to its individual configuration.
@@ -39,7 +44,8 @@ type ScannerConfig struct {
 	// ExcludePaths is a list of path prefixes to skip during scanning.
 	ExcludePaths []string `yaml:"exclude-paths"`
 
-	// Severity is used by trivy to filter by severity level (e.g. ["CRITICAL","HIGH"]).
+	// Severity is used by trivy to filter by severity level. When omitted,
+	// DefaultTrivySeverities applies (all Trivy levels).
 	Severity []string `yaml:"severity"`
 
 	// IgnoreUnfixed tells trivy to omit vulnerabilities that have no fix available.
@@ -170,14 +176,14 @@ func Defaults() *Config {
 	enabled := ScannerConfig{Enabled: true}
 	return &Config{
 		Version: 1,
-		FailOn:  "critical",
+		FailOn:  "info",
 		Scanners: map[string]ScannerConfig{
 			"gitleaks":    enabled,
 			"semgrep":     {Enabled: true, Rulesets: []string{"p/security-audit", "p/secrets"}},
 			"zizmor":      enabled,
 			"actionlint":  enabled,
 			"poutine":     enabled,
-			"trivy":       {Enabled: true, Severity: []string{"CRITICAL", "HIGH"}, IgnoreUnfixed: true},
+			"trivy":       {Enabled: true, Severity: append([]string(nil), DefaultTrivySeverities...), IgnoreUnfixed: true},
 			"osv-scanner": enabled,
 			"checkov":     enabled,
 		},
@@ -201,5 +207,17 @@ func validate(cfg *Config) error {
 		return fmt.Errorf("invalid fail-on value %q; must be one of: critical, high, medium, low, info", cfg.FailOn)
 	}
 
+	for i, s := range cfg.Suppressions {
+		if !suppressionHasSelector(s) {
+			return fmt.Errorf("suppression %d: must specify id, fingerprint, tool, and/or rule-id", i+1)
+		}
+	}
+
 	return nil
+}
+
+// suppressionHasSelector reports whether a suppression entry specifies at least
+// one matching criterion.
+func suppressionHasSelector(s Suppression) bool {
+	return s.ID != "" || s.Fingerprint != "" || s.Tool != "" || s.RuleID != ""
 }

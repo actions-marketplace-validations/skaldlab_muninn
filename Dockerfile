@@ -16,7 +16,7 @@
 # `make scanner-checksums` to regenerate them.
 
 # ── tools: download static Go scanner binaries ───────────────────────────────
-FROM alpine:3.24 AS tools
+FROM alpine:3.24.1 AS tools
 
 RUN apk add --no-cache curl tar
 
@@ -29,9 +29,9 @@ ARG ACTIONLINT_VERSION=1.7.12
 # renovate: datasource=github-releases depName=boostsecurityio/poutine
 ARG POUTINE_VERSION=1.1.6
 # renovate: datasource=github-releases depName=google/osv-scanner
-ARG OSV_SCANNER_VERSION=2.3.8
+ARG OSV_SCANNER_VERSION=2.5.1
 # renovate: datasource=github-releases depName=aquasecurity/trivy
-ARG TRIVY_VERSION=0.71.1
+ARG TRIVY_VERSION=0.74.0
 
 # Target architecture, provided by BuildKit (amd64 | arm64). Declaring the ARG
 # makes the predefined value available; we fall back to uname for plain builds.
@@ -94,8 +94,8 @@ RUN <<'EOF'
 set -eu
 arch="${TARGETARCH:-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')}"
 case "$arch" in
-  amd64) asset="osv-scanner_linux_amd64"; sha="bc98e15319ed0d515e3f9235287ba53cdc5535d576d24fd573978ecfe9ab92dc" ;;
-  arm64) asset="osv-scanner_linux_arm64"; sha="8158b18edd2d03b1a30d905ca91b032bc62262167be8f206c27114f08823e27c" ;;
+  amd64) asset="osv-scanner_linux_amd64"; sha="f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be" ;;
+  arm64) asset="osv-scanner_linux_arm64"; sha="3d0f5aa5a6baa8eb32bcef247388e149ef6030a6634ccae6fa0d62681fb27a6d" ;;
   *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 curl -fsSL -o /usr/local/bin/osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/${asset}"
@@ -109,8 +109,8 @@ RUN <<'EOF'
 set -eu
 arch="${TARGETARCH:-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')}"
 case "$arch" in
-  amd64) asset="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"; sha="3cbae37cd440cd8676e5ce9207fe460b5641c7579a17e9d00f8894928c41a88d" ;;
-  arm64) asset="trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz"; sha="a7daaee66817d67a4963e8f9ddf15f5238ee021b55d3cd8695b1b7801afd34a7" ;;
+  amd64) asset="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"; sha="2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a" ;;
+  arm64) asset="trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz"; sha="b94ce1976bbf3c15b514b605ee88be7c6d94a29be2302847ff01cb794d47aad5" ;;
   *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 curl -fsSL -o /tmp/trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${asset}"
@@ -121,7 +121,7 @@ rm /tmp/trivy.tgz
 EOF
 
 # ── builder: compile Muninn (static, runs on any libc) ───────────────────────
-FROM golang:1.26.4-alpine AS builder
+FROM golang:1.27.0-alpine AS builder
 ARG VERSION=dev
 WORKDIR /src
 COPY go.mod ./
@@ -132,7 +132,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath \
     -o /muninn .
 
 # ── final image (Debian/glibc) ───────────────────────────────────────────────
-FROM python:3.14-slim
+FROM python:3.14.7-slim
 
 # git: gitleaks needs it for commit-history scanning
 # ca-certificates: HTTPS calls made by the scanners
@@ -143,11 +143,15 @@ RUN apt-get update && \
 # Python/Rust scanners installed natively so their compiled parts match the
 # image's glibc.  zizmor ships a Rust binary wheel on PyPI.  Versions and the
 # full transitive dependency tree are hash-locked in requirements-scanners.txt
-# (compiled from requirements-scanners.in via `make scanners-lock`), so pip
-# verifies every artifact's SHA256 with --require-hashes.
-COPY requirements-scanners.txt /tmp/requirements-scanners.txt
-RUN pip install --no-cache-dir --require-hashes -r /tmp/requirements-scanners.txt && \
-    rm /tmp/requirements-scanners.txt && \
+# (compiled from requirements-scanners.in via `make scanners-lock`, which also
+# applies requirements-scanners.overrides).  The same overrides are reapplied
+# at install time for packages semgrep over-constrains.
+COPY requirements-scanners.txt requirements-scanners.overrides /tmp/
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system --no-cache --require-hashes \
+      -r /tmp/requirements-scanners.txt \
+      --override /tmp/requirements-scanners.overrides && \
+    rm /tmp/requirements-scanners.txt /tmp/requirements-scanners.overrides && \
     semgrep --version && checkov --version && zizmor --version
 
 # Static Go scanner binaries
