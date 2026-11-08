@@ -16,7 +16,7 @@
 # `make scanner-checksums` to regenerate them.
 
 # ── tools: download static Go scanner binaries ───────────────────────────────
-FROM alpine:3.24.1 AS tools
+FROM alpine:3.24.2 AS tools
 
 RUN apk add --no-cache curl tar
 
@@ -29,9 +29,9 @@ ARG ACTIONLINT_VERSION=1.7.12
 # renovate: datasource=github-releases depName=boostsecurityio/poutine
 ARG POUTINE_VERSION=1.1.6
 # renovate: datasource=github-releases depName=google/osv-scanner
-ARG OSV_SCANNER_VERSION=2.5.1
+ARG OSV_SCANNER_VERSION=2.7.0
 # renovate: datasource=github-releases depName=aquasecurity/trivy
-ARG TRIVY_VERSION=0.74.0
+ARG TRIVY_VERSION=0.75.0
 
 # Target architecture, provided by BuildKit (amd64 | arm64). Declaring the ARG
 # makes the predefined value available; we fall back to uname for plain builds.
@@ -94,8 +94,8 @@ RUN <<'EOF'
 set -eu
 arch="${TARGETARCH:-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')}"
 case "$arch" in
-  amd64) asset="osv-scanner_linux_amd64"; sha="f9f25499a2c8cc367b3af45df2ea7eeca7fbccceab9c35079968f4b3652194be" ;;
-  arm64) asset="osv-scanner_linux_arm64"; sha="3d0f5aa5a6baa8eb32bcef247388e149ef6030a6634ccae6fa0d62681fb27a6d" ;;
+  amd64) asset="osv-scanner_linux_amd64"; sha="160c6253e2922e9e0a6a9771c5c4c40a4b3c6090b34a3cdd5e80c96cc2e4218b" ;;
+  arm64) asset="osv-scanner_linux_arm64"; sha="4061ef4c021ed3c47f203b818f337e351336cc5cd67c0274fc36bd1dfc728dd7" ;;
   *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 curl -fsSL -o /usr/local/bin/osv-scanner "https://github.com/google/osv-scanner/releases/download/v${OSV_SCANNER_VERSION}/${asset}"
@@ -109,8 +109,8 @@ RUN <<'EOF'
 set -eu
 arch="${TARGETARCH:-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')}"
 case "$arch" in
-  amd64) asset="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"; sha="2ae6fe3ee734b7fdf11335663e18c75ea12dccc76062f09f164a3b0f8be4371a" ;;
-  arm64) asset="trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz"; sha="b94ce1976bbf3c15b514b605ee88be7c6d94a29be2302847ff01cb794d47aad5" ;;
+  amd64) asset="trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz"; sha="c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f" ;;
+  arm64) asset="trivy_${TRIVY_VERSION}_Linux-ARM64.tar.gz"; sha="a1ee9f6ffb7d112b64ff726a2a0717c21175c1114361391f4a132956751a13b3" ;;
   *) echo "unsupported architecture: $arch" >&2; exit 1 ;;
 esac
 curl -fsSL -o /tmp/trivy.tgz "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/${asset}"

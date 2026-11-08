@@ -132,8 +132,8 @@ func TestRequirementsScannersIn_ZizmorPinnedToPatchedRelease(t *testing.T) {
 	if !ok {
 		t.Fatalf("requirements-scanners.in has no exact zizmor==... pin")
 	}
-	if got != "1.30.0" {
-		t.Errorf("zizmor pin = %q, want 1.30.0", got)
+	if got != "1.30.1" {
+		t.Errorf("zizmor pin = %q, want 1.30.1", got)
 	}
 }
 
@@ -228,6 +228,83 @@ func TestRequirementsScannersIn_CryptographySecurityFloor(t *testing.T) {
 	}
 }
 
+func TestRequirementsScannersIn_AnyioSecurityFloor(t *testing.T) {
+	in := readRepoFile(t, requirementsScannersIn)
+	floors := parsePins(floorPinLineRE, in)
+	got, ok := floors["anyio"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in has no anyio>=... security floor")
+	}
+	if got != "4.14.2" {
+		t.Errorf("anyio floor = %q, want 4.14.2", got)
+	}
+}
+
+func TestRequirementsScannersIn_SoupsieveSecurityFloor(t *testing.T) {
+	in := readRepoFile(t, requirementsScannersIn)
+	floors := parsePins(floorPinLineRE, in)
+	got, ok := floors["soupsieve"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in has no soupsieve>=... security floor")
+	}
+	if got != "2.9.0" {
+		t.Errorf("soupsieve floor = %q, want 2.9.0", got)
+	}
+}
+
+func TestRequirementsScannersOverrides_PyJWTForcedToPatchedRelease(t *testing.T) {
+	data, err := os.ReadFile("requirements-scanners.overrides")
+	if err != nil {
+		t.Fatalf("read requirements-scanners.overrides: %v", err)
+	}
+	overrides := string(data)
+	if !strings.Contains(overrides, "pyjwt==2.15.1") {
+		t.Errorf("requirements-scanners.overrides must force pyjwt==2.15.1 because semgrep pins ~=2.13.0, got: %q", overrides)
+	}
+	if !strings.Contains(overrides, "--hash=sha256:") {
+		t.Errorf("pyjwt override must include --hash=sha256 so Docker --require-hashes install succeeds, got: %q", overrides)
+	}
+	if !strings.Contains(overrides, "GHSA-ffc3-869f-jxw9") {
+		t.Errorf("pyjwt override is missing GHSA-ffc3-869f-jxw9 rationale, got: %q", overrides)
+	}
+}
+
+func TestRequirementsScannersIn_PyJWTSecurityFloor(t *testing.T) {
+	in := readRepoFile(t, requirementsScannersIn)
+	floors := parsePins(floorPinLineRE, in)
+	got, ok := floors["pyjwt"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in has no pyjwt>=... security floor")
+	}
+	if got != "2.15.0" {
+		t.Errorf("pyjwt floor = %q, want 2.15.0", got)
+	}
+}
+
+func TestRequirementsScannersIn_Urllib3SecurityFloor(t *testing.T) {
+	in := readRepoFile(t, requirementsScannersIn)
+	floors := parsePins(floorPinLineRE, in)
+	got, ok := floors["urllib3"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in has no urllib3>=... security floor")
+	}
+	if got != "2.8.0" {
+		t.Errorf("urllib3 floor = %q, want 2.8.0", got)
+	}
+}
+
+func TestRequirementsScannersIn_MultidictSecurityFloor(t *testing.T) {
+	in := readRepoFile(t, requirementsScannersIn)
+	floors := parsePins(floorPinLineRE, in)
+	got, ok := floors["multidict"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in has no multidict>=... security floor")
+	}
+	if got != "6.9.1" {
+		t.Errorf("multidict floor = %q, want 6.9.1", got)
+	}
+}
+
 // TestPinVersionRegexRejectsPrereleaseSuffixes keeps pin/floor regexes on
 // numeric dotted versions so compareVersions and lockfile parsing stay stable.
 func TestPinVersionRegexRejectsPrereleaseSuffixes(t *testing.T) {
@@ -237,7 +314,7 @@ func TestPinVersionRegexRejectsPrereleaseSuffixes(t *testing.T) {
 		line string
 		want bool
 	}{
-		{"exact release", exactPinLineRE, "zizmor==1.30.0", true},
+		{"exact release", exactPinLineRE, "zizmor==1.30.1", true},
 		{"exact rc rejected", exactPinLineRE, "zizmor==1.29.0rc1", false},
 		{"floor release", floorPinLineRE, "aiohttp>=3.14.1", true},
 		{"floor alpha rejected", floorPinLineRE, "aiohttp>=3.14.1a1", false},
@@ -408,7 +485,7 @@ func TestRequirementsScannersTxt_ZizmorBlockHasValidHashesAndProvenance(t *testi
 	if !ok {
 		t.Fatalf("requirements-scanners.txt has no zizmor entry")
 	}
-	if !strings.HasPrefix(block, "zizmor==1.30.0") {
+	if !strings.HasPrefix(block, "zizmor==1.30.1") {
 		t.Errorf("zizmor block does not start with the expected pin, got: %q", block)
 	}
 
@@ -476,6 +553,41 @@ func TestRequirementsScannersTxt_AstevalNoLongerOnStaleVulnerableVersion(t *test
 	txt := readRepoFile(t, requirementsScannersTxt)
 	if strings.Contains(txt, "asteval==1.0.6") {
 		t.Errorf("requirements-scanners.txt still contains the stale, vulnerable asteval==1.0.6 pin")
+	}
+}
+
+func TestRequirementsScannersTxt_AnyioNoLongerOnStaleVulnerableVersion(t *testing.T) {
+	txt := readRepoFile(t, requirementsScannersTxt)
+	if strings.Contains(txt, "anyio==4.13.0") {
+		t.Errorf("requirements-scanners.txt still contains the stale, vulnerable anyio==4.13.0 pin")
+	}
+}
+
+func TestRequirementsScannersTxt_SoupsieveNoLongerOnStaleVulnerableVersion(t *testing.T) {
+	txt := readRepoFile(t, requirementsScannersTxt)
+	if strings.Contains(txt, "soupsieve==2.8.4") {
+		t.Errorf("requirements-scanners.txt still contains the stale, vulnerable soupsieve==2.8.4 pin")
+	}
+}
+
+func TestRequirementsScannersTxt_PyJWTNoLongerOnStaleVulnerableVersion(t *testing.T) {
+	txt := readRepoFile(t, requirementsScannersTxt)
+	if strings.Contains(txt, "pyjwt==2.13.0") {
+		t.Errorf("requirements-scanners.txt still contains the stale, vulnerable pyjwt==2.13.0 pin")
+	}
+}
+
+func TestRequirementsScannersTxt_Urllib3NoLongerOnStaleVulnerableVersion(t *testing.T) {
+	txt := readRepoFile(t, requirementsScannersTxt)
+	if strings.Contains(txt, "urllib3==2.7.0") {
+		t.Errorf("requirements-scanners.txt still contains the stale, vulnerable urllib3==2.7.0 pin")
+	}
+}
+
+func TestRequirementsScannersTxt_MultidictNoLongerOnStaleVulnerableVersion(t *testing.T) {
+	txt := readRepoFile(t, requirementsScannersTxt)
+	if strings.Contains(txt, "multidict==6.7.1") {
+		t.Errorf("requirements-scanners.txt still contains the stale, vulnerable multidict==6.7.1 pin")
 	}
 }
 
@@ -600,6 +712,46 @@ func TestRequirementsScannersLockfile_AllFloorsSatisfied(t *testing.T) {
 	}
 	if astevalFloor != "1.0.10" {
 		t.Errorf("asteval floor = %q, want 1.0.10", astevalFloor)
+	}
+
+	anyioFloor, ok := floors["anyio"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in missing anyio>=... security floor")
+	}
+	if anyioFloor != "4.14.2" {
+		t.Errorf("anyio floor = %q, want 4.14.2", anyioFloor)
+	}
+
+	soupsieveFloor, ok := floors["soupsieve"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in missing soupsieve>=... security floor")
+	}
+	if soupsieveFloor != "2.9.0" {
+		t.Errorf("soupsieve floor = %q, want 2.9.0", soupsieveFloor)
+	}
+
+	pyjwtFloor, ok := floors["pyjwt"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in missing pyjwt>=... security floor")
+	}
+	if pyjwtFloor != "2.15.0" {
+		t.Errorf("pyjwt floor = %q, want 2.15.0", pyjwtFloor)
+	}
+
+	urllib3Floor, ok := floors["urllib3"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in missing urllib3>=... security floor")
+	}
+	if urllib3Floor != "2.8.0" {
+		t.Errorf("urllib3 floor = %q, want 2.8.0", urllib3Floor)
+	}
+
+	multidictFloor, ok := floors["multidict"]
+	if !ok {
+		t.Fatalf("requirements-scanners.in missing multidict>=... security floor")
+	}
+	if multidictFloor != "6.9.1" {
+		t.Errorf("multidict floor = %q, want 6.9.1", multidictFloor)
 	}
 
 	for name, floor := range floors {

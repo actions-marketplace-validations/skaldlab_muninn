@@ -9,6 +9,33 @@
   `PYSEC-2026-1325` / `CVE-2024-23342` with no fixed release yet.
 - The secure `aiohttp>=3.14.3` floor remains enforced.
 
+## [0.3.14] - 2026-10-12
+
+### Changed
+
+- Docker image scanner update: osv-scanner `2.7.0`.
+- multidict floor raised to >=6.9.1 for GHSA-54p9-h82j-f925
+  (CVE-2026-104874 items-view reference leak).
+
+## [0.3.13] - 2026-10-01
+
+### Changed
+
+- Docker image scanner updates: osv-scanner `2.6.0`, trivy `0.75.0`,
+  semgrep `1.178.0`, zizmor `1.30.1` (checkov remains at `3.2.531`
+  pending a fixed ecdsa or checkov constraint change).
+- anyio floor raised to >=4.14.2 for GHSA-82r6-8w77-94w6 and
+  GHSA-5p39-cfhj-2xmp (CVE-2026-63374 / CVE-2026-64847); lockfile
+  resolves to 4.15.1.
+- soupsieve floor raised to >=2.9.0 for GHSA-gjv8-xp57-g29c and
+  GHSA-j934-xhv5-fg8f (CVE-2026-86000 / CVE-2026-85999); lockfile
+  resolves to 2.10.
+- PyJWT floor raised to >=2.15.0 (hashed override to 2.15.1) for
+  GHSA-ffc3-869f-jxw9 and related 2.14/2.15 JWT hardening advisories;
+  semgrep still requires `pyjwt~=2.13.0`.
+- urllib3 floor raised to >=2.8.0 for GHSA-8988-9cw3-xx77,
+  GHSA-vxq7-64xx-v4gw, and GHSA-gh4c-6fx4-qh6g; lockfile resolves to 2.8.0.
+
 ## [0.3.12] - 2026-09-07
 
 ### Changed
