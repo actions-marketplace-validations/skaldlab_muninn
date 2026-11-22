@@ -4,10 +4,56 @@
 
 ### Changed
 
-- checkov remains pinned at `3.2.531`: `3.2.532+` and `3.3.x` reintroduce
-  transitive `ecdsa` (`>=0.19.0,<1.0.0`), currently affected by
+- checkov remains pinned at `3.2.531`: `3.2.532+` and `3.3.x`/`3.4.x`
+  reintroduce transitive `ecdsa` (`>=0.19.0,<1.0.0`), currently affected by
   `PYSEC-2026-1325` / `CVE-2024-23342` with no fixed release yet.
-- The secure `aiohttp>=3.14.3` floor remains enforced.
+
+## [0.4.0] - 2026-11-14
+
+### Added
+
+- Bitbucket Cloud Pipelines support via `pipe: docker://ghcr.io/skaldlab/muninn:…`:
+  idempotent PR comment upsert, Code Insights report/annotations, example
+  pipeline, and `pipe.yml`. GitHub Actions–oriented scanners (`zizmor`,
+  `actionlint`, `poutine`) default to off on Bitbucket unless explicitly
+  enabled in `muninn.yml`.
+- `pipeline-check` scanner (`pipeline-check==1.19.0`) for Bitbucket Pipelines
+  YAML security posture (`BB-*` rules). Defaults to on in Bitbucket CI and off
+  elsewhere. Installed in an isolated Docker venv (separate from checkov’s
+  pinned boto3).
+- Bitbucket end-to-end tests (`bitbucket_e2e_test.go` and
+  `integration/bitbucket_test.go`) that fake the Cloud API via
+  `BITBUCKET_API_URL` (no live Bitbucket credentials required).
+
+### Changed
+
+- CI coverage gate raised from 90% to 95%.
+- soupsieve floor raised to >=4.0.0 for GHSA-6655-6qjp-jx7x /
+  CVE-2026-126191, GHSA-7g44-g9rc-x53w / CVE-2026-126193, and
+  GHSA-mmhr-3c5m-f64f / CVE-2026-126190 (lockfile resolves to 4.1).
+
+## [0.3.15] - 2026-11-08
+
+### Changed
+
+- Docker image scanner updates: trivy `0.76.2`, semgrep `1.184.0`,
+  zizmor `1.32.0` (checkov remains at `3.2.531` pending a fixed ecdsa or
+  checkov constraint change).
+- aiohttp floor raised to >=3.14.5 for GHSA-2g87-pp6c-29x5 and related
+  3.14.4 HTTP hardening advisories.
+- GitPython floor raised to >=3.2.1 for GHSA-23mf-xhv8-69c2,
+  GHSA-83vg-56qc-22m7, GHSA-f9j4-qggq-h239, GHSA-m64x-33q8-m5h7,
+  GHSA-w8jc-g24h-crhw, GHSA-fx3j-rwgx-fr94, and GHSA-gq48-pqfc-9p58.
+- certifi floor raised to >=2026.10.19 for GHSA-6q48-6c7w-9gw2 /
+  PYSEC-2026-4320.
+- mcp floor raised to >=1.30.0 (hashed override to 1.30.0) for
+  GHSA-5h93-6whr-6q8j, GHSA-84m7-p3x7-pcfv, GHSA-rwrf-2pqf-9j8j, and
+  GHSA-w4fh-qvv9-3v23; semgrep still requires `mcp==1.29.0`.
+- opentelemetry-api floor raised to >=1.45.1 (hashed OpenTelemetry stack
+  override to 1.45.2 / 0.66b2) for GHSA-xcq7-p3pf-p88h; semgrep still
+  requires `opentelemetry-api~=1.37.0`.
+- Dropped the PyJWT hashed override after semgrep 1.184.0 loosened its
+  pin to `pyjwt[crypto]>=2.15.0,<3`; the `pyjwt>=2.15.0` floor remains.
 
 ## [0.3.14] - 2026-10-12
 
